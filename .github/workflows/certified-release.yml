@@ -1,0 +1,71 @@
+name: Certified release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+jobs:
+  certified-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Build and test release artifact
+        run: |
+          make test
+          make release
+
+      - name: Generate GitHub build-provenance attestation
+        uses: actions/attest@v4
+        with:
+          subject-path: dist/cejel-certified-release-example-linux-x86_64
+
+      - name: Run the published Cejel action
+        uses: BargLabs/cejel/action@v1
+        with:
+          out-dir: .cejel
+
+      - name: Assert the Cejel release and source binding
+        shell: bash
+        run: |
+          test "$(jq -r '.predicate.tool.version' .cejel/attestation.json)" = "0.4.5"
+          test "$(jq -r '.repo.headSha' .cejel/report.json)" = "$GITHUB_SHA"
+          grep -F "$GITHUB_SHA" .cejel/certificate.html
+
+      - name: Record evidence in the job summary
+        shell: bash
+        run: |
+          artifact_sha256=$(sha256sum dist/cejel-certified-release-example-linux-x86_64 | cut -d ' ' -f 1)
+          report_sha256=$(sha256sum .cejel/report.json | cut -d ' ' -f 1)
+          {
+            echo "## Certified release evidence"
+            echo
+            echo "- Commit: \`$GITHUB_SHA\`"
+            echo "- Artifact SHA-256: \`$artifact_sha256\`"
+            echo "- Cejel report SHA-256: \`$report_sha256\`"
+            echo "- Cejel action version: \`$(jq -r '.predicate.tool.version' .cejel/attestation.json)\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: certified-release-binary
+          path: dist/cejel-certified-release-example-linux-x86_64
+          if-no-files-found: error
+
+      - name: Upload Cejel certificate
+        uses: actions/upload-artifact@v4
+        with:
+          name: cejel-certificate
+          path: |
+            .cejel/report.json
+            .cejel/certificate.html
+            .cejel/attestation.json
+          if-no-files-found: error
