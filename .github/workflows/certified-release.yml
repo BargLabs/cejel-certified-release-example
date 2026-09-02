@@ -35,7 +35,7 @@ jobs:
       - name: Assert the Cejel release and source binding
         shell: bash
         run: |
-          test "$(jq -r '.predicate.tool.version' .cejel/attestation.json)" = "0.4.5"
+          test "$(jq -r '.predicate.tool.version' .cejel/attestation.json)" = "0.4.6"
           test "$(jq -r '.repo.headSha' .cejel/report.json)" = "$GITHUB_SHA"
           grep -F "$GITHUB_SHA" .cejel/certificate.html
 
